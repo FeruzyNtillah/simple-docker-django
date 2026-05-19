@@ -1,121 +1,112 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
+import axios from 'axios'
 import './App.css'
 
+interface Task {
+  id: number
+  title: string
+  completed: boolean
+  created_at: string
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [newTitle, setNewTitle] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchTasks()
+  }, [])
+
+  async function fetchTasks() {
+    try {
+      const res = await axios.get<Task[]>('/api/tasks/')
+      setTasks(res.data)
+    } catch {
+      setError('Failed to load tasks. Is the backend running?')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function addTask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+    try {
+      const res = await axios.post<Task>('/api/tasks/', { title: newTitle.trim(), completed: false })
+      setTasks(prev => [res.data, ...prev])
+      setNewTitle('')
+    } catch {
+      setError('Failed to add task.')
+    }
+  }
+
+  async function toggleTask(task: Task) {
+    try {
+      const res = await axios.patch<Task>(`/api/tasks/${task.id}/`, { completed: !task.completed })
+      setTasks(prev => prev.map(t => (t.id === task.id ? res.data : t)))
+    } catch {
+      setError('Failed to update task.')
+    }
+  }
+
+  async function deleteTask(id: number) {
+    try {
+      await axios.delete(`/api/tasks/${id}/`)
+      setTasks(prev => prev.filter(t => t.id !== id))
+    } catch {
+      setError('Failed to delete task.')
+    }
+  }
+
+  const done = tasks.filter(t => t.completed).length
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <header>
+        <h1>Tasks</h1>
+        {tasks.length > 0 && (
+          <p className="summary">{done} of {tasks.length} completed</p>
+        )}
+      </header>
 
-      <div className="ticks"></div>
+      <form onSubmit={addTask} className="add-form">
+        <input
+          value={newTitle}
+          onChange={e => setNewTitle(e.target.value)}
+          placeholder="Add a new task…"
+        />
+        <button type="submit">Add</button>
+      </form>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {error && <p className="error">{error}</p>}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {loading ? (
+        <p className="state">Loading…</p>
+      ) : tasks.length === 0 ? (
+        <p className="state">No tasks yet. Add one above.</p>
+      ) : (
+        <ul className="task-list">
+          {tasks.map(task => (
+            <li key={task.id} className={task.completed ? 'done' : ''}>
+              <input
+                type="checkbox"
+                checked={task.completed}
+                onChange={() => toggleTask(task)}
+              />
+              <span className="title">{task.title}</span>
+              <span className="date">
+                {new Date(task.created_at).toLocaleDateString()}
+              </span>
+              <button className="delete" onClick={() => deleteTask(task.id)} aria-label="Delete">
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
